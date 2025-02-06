@@ -1,0 +1,31 @@
+<Project>
+	<PropertyGroup>
+		<EnableRefitGeneration Condition="'$(EnableRefitGeneration)'=='' AND '$(Configuration)' == 'Debug'">true</EnableRefitGeneration>
+		<OpenApiDocumentation Condition="'$(OpenApiDocumentation)'==''">$(MSBuildProjectDirectory)\swagger.json</OpenApiDocumentation>
+		<ProjectName Condition="'$(ProjectName)'==''">$(MSBuildProjectName).Client</ProjectName>
+		<NamespacePrefix Condition="'$(NamespacePrefix)'==''">$(MSBuildProjectName).Client</NamespacePrefix>
+		<RefitterOutputDirectory Condition="'$(RefitterOutputDirectory)'==''">$(MSBuildProjectDirectory)\..\$(ProjectName)\Clients</RefitterOutputDirectory>
+		<RefitterContractsOutputDirectory Condition="'$(RefitterContractsOutputDirectory)'==''">$(MSBuildProjectDirectory)\..\$(ProjectName)\Contracts</RefitterContractsOutputDirectory>
+		<RefitLockFile Condition="'$(RefitLockFile)'==''">$(RefitterOutputDirectory)ApiSuppresion.cs</RefitLockFile>
+	</PropertyGroup>
+	<Target Name="GenerateSwaggerCopyDll" AfterTargets="AfterBuild" Condition="'$(EnableRefitGeneration)' == 'true'">
+		<CreateProperty Value="$(OutDir)$(TargetFileName)" Condition="'$(RefitDllFile)'==''">
+			<Output TaskParameter="Value" PropertyName="RefitDllFile" />
+		</CreateProperty>
+		
+		<CreateProperty Value="$(OutDir)Copied$(TargetFileName)" Condition="'$(TempRefitDllFile)'==''">
+			<Output TaskParameter="Value" PropertyName="TempRefitDllFile" />
+		</CreateProperty>
+		
+		<Copy SourceFiles="$(RefitDllFile)" DestinationFiles="$(TempRefitDllFile)" />
+		<Copy SourceFiles="$(OutDir)\$(MSBuildProjectName).deps.json" DestinationFiles="$(OutDir)\Copied$(MSBuildProjectName).deps.json" />
+		<Copy SourceFiles="$(OutDir)\$(MSBuildProjectName).runtimeconfig.json" DestinationFiles="$(OutDir)\Copied$(MSBuildProjectName).runtimeconfig.json" />
+	</Target>
+	<Target Name="GenerateSwaggerPostBuild" AfterTargets="AfterBuild" Inputs="@(Compile)" Outputs="$(OpenApiDocumentation)" Condition="'$(EnableRefitGeneration)' == 'true'">
+		<Exec Command="dotnet tool restore" />
+		<Exec Command="dotnet tool run swagger tofile --output $(OpenApiDocumentation) $(TempRefitDllFile) v1" />
+	</Target>
+	<Target Name="SwaggerPostBuildTarget" AfterTargets="GenerateSwaggerPostBuild" Inputs="$(OpenApiDocumentation)" Outputs="$(RefitLockFile)" Condition="'$(EnableRefitGeneration)' == 'true'">
+		<Exec Command="dotnet refitter $(OpenApiDocumentation) -o $(RefitterOutputDirectory) --multiple-files --operation-name-template {operationName}Async --multiple-interfaces ByTag -n $(NamespacePrefix).Clients --contracts-output $(RefitterContractsOutputDirectory) --contracts-namespace $(NamespacePrefix).Contracts --no-accept-headers --use-api-response --cancellation-tokens --operation-name-generator MultipleClientsFromOperationId" ContinueOnError="true" />
+	</Target>
+</Project>
